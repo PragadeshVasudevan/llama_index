@@ -7,6 +7,7 @@ Node-level:
     - `SummaryExtractor`: Summary of each node, and pre and post nodes
     - `QuestionsAnsweredExtractor`: Questions that the node can answer
     - `KeywordsExtractor`: Keywords that uniquely identify the node
+    - `CustomExtractor`: list of keywords to check from the document, this address missed out extraction from KeywordExtractor.
 Document-level:
     - `TitleExtractor`: Document title, possible inferred across multiple nodes
 
@@ -31,6 +32,7 @@ from llama_index.prompts import PromptTemplate
 from llama_index.schema import BaseNode, TextNode
 from llama_index.types import BasePydanticProgram
 from llama_index.utils import get_tqdm_iterable
+import re
 
 DEFAULT_TITLE_NODE_TEMPLATE = """\
 Context: {context_str}. Give a title that summarizes all of \
@@ -215,6 +217,63 @@ document. Format as comma separated. Keywords: """
 
         return metadata_list
 
+class CustomExtractor(BaseExtractor):
+    """Custom extractor. Node-level extractor. Extracts
+    `custom_keywords` metadata field.
+
+    Args:
+        keywords (List): list of interested keywords to look for in the document.
+    """
+
+    keywords_list: List = Field(description="List of keywords to check and extract from the chunk separated by comma, minimum 1", gt=1)
+
+    def __init__(
+        self,
+        keywords_list: str,
+        num_workers: int = DEFAULT_NUM_WORKERS,
+        **kwargs: Any,
+    ) -> None:
+        """Init params."""
+        if len(keywords_list) < 1:
+            raise ValueError("num_keywords must be >= 1")
+        super().__init__(
+            keywords_list=keywords_list,
+            num_workers=num_workers,
+            **kwargs,
+        )
+
+    @classmethod
+    def class_name(cls) -> str:
+        return "CustomExtractor"
+
+    async def _aextract_keywords_from_node(self, node: BaseNode) -> Dict[str, str]:
+        """Extract Custom keywords from a node and return it's metadata dict."""
+        if self.is_text_node_only and not isinstance(node, TextNode):
+            return {}
+        
+        context_str = node.get_content(metadata_mode=self.metadata_mode)
+        keyword = set()
+        text = re.sub(r"[\([{})\]]", "", context_str)
+        text = text.lower().split()
+        for word in text:
+            if word in self.keywords_list:
+                keyword.add(word)
+                pass
+
+        keywords = list(keyword)
+
+        return {"custom_keywords": keywords}
+
+    async def aextract(self, nodes: Sequence[BaseNode]) -> List[Dict]:
+        keyword_jobs = []
+        for node in nodes:
+            keyword_jobs.append(self._aextract_keywords_from_node(node))
+
+        metadata_list: List[Dict] = await run_jobs(
+            keyword_jobs, show_progress=self.show_progress, workers=self.num_workers
+        )
+
+        return metadata_list
 
 DEFAULT_QUESTION_GEN_TMPL = """\
 Here is the context:

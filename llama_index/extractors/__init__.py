@@ -5,6 +5,7 @@ from llama_index.extractors.marvin_metadata_extractor import (
 from llama_index.extractors.metadata_extractors import (
     EntityExtractor,
     KeywordExtractor,
+    CustomExtractor,
     PydanticProgramExtractor,
     QuestionsAnsweredExtractor,
     SummaryExtractor,
@@ -16,6 +17,7 @@ __all__ = [
     "QuestionsAnsweredExtractor",
     "TitleExtractor",
     "KeywordExtractor",
+    "CustomExtractor",
     "EntityExtractor",
     "MarvinMetadataExtractor",
     "BaseExtractor",
